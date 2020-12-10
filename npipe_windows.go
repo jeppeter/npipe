@@ -206,12 +206,27 @@ func newOverlapped() (*syscall.Overlapped, error) {
 // waitForCompletion waits for an asynchronous I/O request referred to by overlapped to complete.
 // This function returns the number of bytes transferred by the operation and an error code if
 // applicable (nil otherwise).
-func waitForCompletion(handle syscall.Handle, overlapped *syscall.Overlapped) (uint32, error) {
-	_, err := syscall.WaitForSingleObject(overlapped.HEvent, syscall.INFINITE)
+func waitForCompletion(handle syscall.Handle, mills int, overlapped *syscall.Overlapped) (transferred uint32, err error) {
+	var s uint32
+	if mills == 0 {
+		s, err = syscall.WaitForSingleObject(overlapped.HEvent, syscall.INFINITE)
+	} else {
+		s, err = syscall.WaitForSingleObject(overlapped.HEvent, uint32(mills))
+	}
 	if err != nil {
 		return 0, err
 	}
-	var transferred uint32
+	switch s {
+	case syscall.WAIT_OBJECT_0:
+		break
+	case syscall.WAIT_FAILED:
+		return 0, PipeError{fmt.Sprintf("WaitForSingleObject %v", err), false}
+	case syscall.WAIT_TIMEOUT:
+		return 0, PipeError{fmt.Sprintf("wait timeout"), true}
+	default:
+		return 0, PipeError{fmt.Sprintf("WaitForSingleObject error on %x", s), false}
+	}
+
 	err = getOverlappedResult(handle, overlapped, &transferred, true)
 	return transferred, err
 }
@@ -282,8 +297,7 @@ func (l *PipeListener) Accept() (net.Conn, error) {
 	return c, nil
 }
 
-// AcceptPipe accepts the next incoming call and returns the new connection.
-func (l *PipeListener) AcceptPipe() (*PipeConn, error) {
+func (l *PipeListener) _acceptPipe(mills int) (*PipeConn, error) {
 	if l == nil || l.addr == "" || l.closed {
 		return nil, syscall.EINVAL
 	}
@@ -310,13 +324,23 @@ func (l *PipeListener) AcceptPipe() (*PipeConn, error) {
 	defer syscall.CloseHandle(overlapped.HEvent)
 	if err := connectNamedPipe(handle, overlapped); err != nil && err != error_pipe_connected {
 		if err == error_io_incomplete || err == syscall.ERROR_IO_PENDING {
-			_, err = waitForCompletion(handle, overlapped)
+			_, err = waitForCompletion(handle, mills, overlapped)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
 	return &PipeConn{handle: handle, addr: l.addr}, nil
+}
+
+// AcceptPipe accepts the next incoming call and returns the new connection.
+func (l *PipeListener) AcceptTimeout(mills int) (*PipeConn, error) {
+	return l._acceptPipe(mills)
+}
+
+// AcceptPipe accepts the next incoming call and returns the new connection.
+func (l *PipeListener) AcceptPipe() (*PipeConn, error) {
+	return l._acceptPipe(0)
 }
 
 // Close stops listening on the address.
@@ -365,7 +389,7 @@ func (c *PipeConn) completeRequest(data iodata, deadline *time.Time, overlapped 
 		}
 		done := make(chan iodata)
 		go func() {
-			n, err := waitForCompletion(c.handle, overlapped)
+			n, err := waitForCompletion(c.handle, 0, overlapped)
 			done <- iodata{n, err}
 		}()
 		select {
