@@ -313,15 +313,19 @@ func (l *PipeListener) _acceptPipe(mills int) (*PipeConn, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		l.handle = 0
 	}
 
 	overlapped, err := newOverlapped()
 	if err != nil {
 		return nil, err
 	}
-	defer syscall.CloseHandle(overlapped.HEvent)
+
+	defer func() {
+		if overlapped.HEvent != 0 {
+			syscall.CancelIoEx(handle, overlapped)
+		}
+		syscall.CloseHandle(overlapped.HEvent)
+	}()
 	if err := connectNamedPipe(handle, overlapped); err != nil && err != error_pipe_connected {
 		if err == error_io_incomplete || err == syscall.ERROR_IO_PENDING {
 			_, err = waitForCompletion(handle, mills, overlapped)
