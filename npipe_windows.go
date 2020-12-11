@@ -313,6 +313,8 @@ func (l *PipeListener) _acceptPipe(mills int) (*PipeConn, error) {
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		return nil, syscall.EINVAL
 	}
 
 	overlapped, err := newOverlapped()
