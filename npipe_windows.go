@@ -46,6 +46,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 	"unsafe"
@@ -426,14 +427,18 @@ type iodata struct {
 func (c *PipeConn) completeRequest(data iodata, deadline *time.Time, overlapped *syscall.Overlapped) (int, error) {
 	if data.err == error_io_incomplete || data.err == syscall.ERROR_IO_PENDING {
 		var timer <-chan time.Time
+		var mills int = 0
+		var nowt time.Time
 		if deadline != nil {
-			if timeDiff := deadline.Sub(time.Now()); timeDiff > 0 {
+			nowt = time.Now()
+			if timeDiff := deadline.Sub(nowt); timeDiff > 0 {
 				timer = time.After(timeDiff)
+				mills, _ = strconv.Atoi(fmt.Sprintf("%d", deadline.Sub(nowt)/time.Millisecond))
 			}
 		}
 		done := make(chan iodata)
 		go func() {
-			n, err := waitForCompletion(c.handle, 0, overlapped)
+			n, err := waitForCompletion(c.handle, mills, overlapped)
 			done <- iodata{n, err}
 		}()
 		select {
