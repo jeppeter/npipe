@@ -426,27 +426,25 @@ type iodata struct {
 // the content of iodata is returned.
 func (c *PipeConn) completeRequest(data iodata, deadline *time.Time, overlapped *syscall.Overlapped) (int, error) {
 	if data.err == error_io_incomplete || data.err == syscall.ERROR_IO_PENDING {
-		var timer <-chan time.Time
+		//var timer <-chan time.Time
 		var mills int = 0
 		var nowt time.Time
 		if deadline != nil {
 			nowt = time.Now()
 			if timeDiff := deadline.Sub(nowt); timeDiff > 0 {
-				timer = time.After(timeDiff)
+				//timer = time.After(timeDiff)
 				mills, _ = strconv.Atoi(fmt.Sprintf("%d", deadline.Sub(nowt)/time.Millisecond))
 			}
 		}
-		done := make(chan iodata)
-		go func() {
-			n, err := waitForCompletion(c.handle, mills, overlapped)
-			done <- iodata{n, err}
-		}()
-		select {
-		case data = <-done:
-		case <-timer:
-			syscall.CancelIoEx(c.handle, overlapped)
-			data = iodata{0, timeout(c.addr.String())}
+		n, err := waitForCompletion(c.handle, mills, overlapped)
+		if err != nil {
+			neterr, ok := err.(net.Error)
+			if ok && neterr.Timeout() {
+				/*we cancel handle*/
+				syscall.CancelIoEx(c.handle, overlapped)
+			}
 		}
+		data = iodata{n, err}
 	}
 	// Windows will produce ERROR_BROKEN_PIPE upon closing
 	// a handle on the other end of a connection. Go RPC
