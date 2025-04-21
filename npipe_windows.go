@@ -10,28 +10,29 @@
 // functions, as well as associated implementations of net.Conn and net.Listener
 //
 // The Dial function connects a client to a named pipe:
-//   conn, err := npipe.Dial(`\\.\pipe\mypipename`)
-//   if err != nil {
-//   	<handle error>
-//   }
-//   fmt.Fprintf(conn, "Hi server!\n")
-//   msg, err := bufio.NewReader(conn).ReadString('\n')
-//   ...
+//
+//	conn, err := npipe.Dial(`\\.\pipe\mypipename`)
+//	if err != nil {
+//		<handle error>
+//	}
+//	fmt.Fprintf(conn, "Hi server!\n")
+//	msg, err := bufio.NewReader(conn).ReadString('\n')
+//	...
 //
 // The Listen function creates servers:
 //
-//   ln, err := npipe.Listen(`\\.\pipe\mypipename`)
-//   if err != nil {
-//   	// handle error
-//   }
-//   for {
-//   	conn, err := ln.Accept()
-//   	if err != nil {
-//   		// handle error
-//   		continue
-//   	}
-//   	go handleConnection(conn)
-//   }
+//	ln, err := npipe.Listen(`\\.\pipe\mypipename`)
+//	if err != nil {
+//		// handle error
+//	}
+//	for {
+//		conn, err := ln.Accept()
+//		if err != nil {
+//			// handle error
+//			continue
+//		}
+//		go handleConnection(conn)
+//	}
 package npipe
 
 //sys createNamedPipe(name *uint16, openMode uint32, pipeMode uint32, maxInstances uint32, outBufSize uint32, inBufSize uint32, defaultTimeout uint32, sa *syscall.SecurityAttributes) (handle syscall.Handle, err error)  [failretval==syscall.InvalidHandle] = CreateNamedPipeW
@@ -169,11 +170,12 @@ func (e PipeError) Temporary() bool {
 // Dial will return a PipeError if you pass in a badly formatted pipe name.
 //
 // Examples:
-//   // local pipe
-//   conn, err := Dial(`\\.\pipe\mypipename`)
 //
-//   // remote pipe
-//   conn, err := Dial(`\\othercomp\pipe\mypipename`)
+//	// local pipe
+//	conn, err := Dial(`\\.\pipe\mypipename`)
+//
+//	// remote pipe
+//	conn, err := Dial(`\\othercomp\pipe\mypipename`)
 func Dial(address string) (*PipeConn, error) {
 	for {
 		conn, err := dial(address, nmpwait_wait_forever)
@@ -310,7 +312,9 @@ func dial(address string, timeout uint32) (*PipeConn, error) {
 //
 // Listen will return a PipeError for an incorrectly formatted pipe name.
 func Listen(address string) (*PipeListener, error) {
-	handle, err := createPipe(address, true)
+	//handle, err := createPipe(address, true)
+	/*because we used single one ,so do this*/
+	handle, err := createPipe(address, false)
 	if err == error_invalid_name {
 		return nil, badAddr(address)
 	}
